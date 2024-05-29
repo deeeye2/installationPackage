@@ -3,7 +3,7 @@
 # Function to install Jenkins
 install_jenkins() {
     echo "Updating package index..."
-    sudo apt update
+    sudo apt update -y
 
     echo "Installing Java 11..."
     sudo apt install -y openjdk-11-jre-headless
@@ -12,16 +12,27 @@ install_jenkins() {
     java -version
 
     echo "Adding Jenkins repository key..."
-    wget -q -O - https://pkg.jenkins.io/debian/jenkins.io.key | sudo apt-key add -
+    curl -fsSL https://pkg.jenkins.io/debian/jenkins.io.key | sudo tee /usr/share/keyrings/jenkins-keyring.asc > /dev/null
 
     echo "Adding Jenkins repository..."
-    sudo sh -c 'echo deb http://pkg.jenkins.io/debian-stable binary/ > /etc/apt/sources.list.d/jenkins.list'
+    echo deb [signed-by=/usr/share/keyrings/jenkins-keyring.asc] https://pkg.jenkins.io/debian-stable binary/ | sudo tee /etc/apt/sources.list.d/jenkins.list > /dev/null
 
     echo "Updating package index again..."
-    sudo apt update
+    sudo apt update -y
 
     echo "Installing Jenkins..."
     sudo apt install -y jenkins
+
+    echo "Creating Jenkins user if it doesn't exist..."
+    if ! id -u jenkins > /dev/null 2>&1; then
+        sudo useradd -r -m -d /var/lib/jenkins -s /bin/bash jenkins
+    fi
+
+    echo "Creating /usr/share/jenkins directory if it doesn't exist..."
+    sudo mkdir -p /usr/share/jenkins
+
+    echo "Downloading jenkins.war..."
+    sudo wget -O /usr/share/jenkins/jenkins.war https://get.jenkins.io/war-stable/latest/jenkins.war
 
     echo "Setting permissions for Jenkins directories..."
     sudo chown -R jenkins:jenkins /var/lib/jenkins
@@ -33,7 +44,7 @@ install_jenkins() {
     sudo sh -c 'echo "JAVA_HOME=/usr/lib/jvm/java-11-openjdk-amd64" >> /etc/default/jenkins'
 
     echo "Configuring Jenkins service file..."
-    sudo tee /lib/systemd/system/jenkins.service > /dev/null <<EOL
+    sudo tee /etc/systemd/system/jenkins.service > /dev/null <<EOL
 [Unit]
 Description=Jenkins Continuous Integration Server
 Requires=network.target
