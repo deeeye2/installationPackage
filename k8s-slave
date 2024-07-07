@@ -1,0 +1,38 @@
+#!/bin/bash
+# SELinux Permissive
+setenforce 0
+sed -i 's/^SELINUX=enforcing$/SELINUX=permissive/' /etc/selinux/config
+
+# Kubernetes Repo
+cat <<EOL | tee /etc/yum.repos.d/kubernetes.repo
+[kubernetes]
+name=Kubernetes
+baseurl=https://pkgs.k8s.io/core:/stable:/v1.30/rpm/
+enabled=1
+gpgcheck=1
+gpgkey=https://pkgs.k8s.io/core:/stable:/v1.30/rpm/repodata/repomd.xml.key
+exclude=kubelet kubeadm kubectl cri-tools kubernetes-cni
+EOL
+
+# Install Kubernetes components
+yum install -y kubelet kubeadm kubectl --disableexcludes=kubernetes
+systemctl enable --now kubelet
+
+# Install Docker
+yum install -y yum-utils
+yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
+yum install -y docker-ce docker-ce-cli containerd.io
+systemctl start docker
+systemctl enable docker
+
+# Configure containerd
+yum install -y containerd
+systemctl enable containerd --now
+mkdir -p /etc/containerd
+containerd config default | tee /etc/containerd/config.toml
+echo "127.0.0.1 kslave" >> /etc/hosts
+sed -i '/SystemdCgroup = false/c\SystemdCgroup = true' /etc/containerd/config.toml
+systemctl restart containerd
+
+# Join the Worker Node to the Cluster
+kubeadm join 172.31.59.63:6443 --token a76tp9.t9pban21fyo091cq --discovery-token-ca-cert-hash sha256:fa4188f35f07f8a995d8bc226f5b497b74746dc608923ccf432d130d974e18f2
