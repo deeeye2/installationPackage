@@ -1,0 +1,46 @@
+#!/bin/bash
+# SELinux Permissive
+setenforce 0
+sed -i 's/^SELINUX=enforcing$/SELINUX=permissive/' /etc/selinux/config
+
+# Kubernetes Repo
+cat <<EOL | tee /etc/yum.repos.d/kubernetes.repo
+[kubernetes]
+name=Kubernetes
+baseurl=https://pkgs.k8s.io/core:/stable:/v1.30/rpm/
+enabled=1
+gpgcheck=1
+gpgkey=https://pkgs.k8s.io/core:/stable:/v1.30/rpm/repodata/repomd.xml.key
+exclude=kubelet kubeadm kubectl cri-tools kubernetes-cni
+EOL
+
+# Install Kubernetes components
+yum install -y kubelet kubeadm kubectl --disableexcludes=kubernetes
+systemctl enable --now kubelet
+
+# Install Docker
+yum install -y yum-utils
+yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
+yum install -y docker-ce docker-ce-cli containerd.io
+systemctl start docker
+systemctl enable docker
+
+# Configure containerd
+yum install -y containerd
+systemctl enable containerd --now
+mkdir -p /etc/containerd
+containerd config default | tee /etc/containerd/config.toml
+
+sed -i '/SystemdCgroup = false/c\SystemdCgroup = true' /etc/containerd/config.toml
+systemctl restart containerd
+
+# Initialize Kubernetes
+kubeadm init --pod-network-cidr=192.168.0.0/16 --apiserver-advertise-address=172.31.59.63
+echo "127.0.0.1 kmaster" >> /etc/hosts
+# Set up kubectl for regular user
+mkdir -p /root/.kube
+cp -i /etc/kubernetes/admin.conf /root/.kube/config
+chown 0:0 /root/.kube/config
+
+# Deploy Calico network
+kubectl apply -f https://docs.projectcalico.org/manifests/calico.yaml
