@@ -34,5 +34,7 @@ echo "127.0.0.1 kslave" >> /etc/hosts
 sed -i '/SystemdCgroup = false/c\SystemdCgroup = true' /etc/containerd/config.toml
 systemctl restart containerd
 
+#kubeadm token create --print-join-command
+
 # Join the Worker Node to the Cluster
 kubeadm join 172.31.59.63:6443 --token a76tp9.t9pban21fyo091cq --discovery-token-ca-cert-hash sha256:fa4188f35f07f8a995d8bc226f5b497b74746dc608923ccf432d130d974e18f2
